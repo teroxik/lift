@@ -22,7 +22,7 @@
 *.lock
 
 pebble/build
-
+android/handheld/out
 .vagrant
 
 ####
