@@ -11,6 +11,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import com.mj.lift.rest.Rest;
 import com.mj.lift.rest.RestResponse;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 public class Login extends Activity implements View.OnClickListener {
@@ -45,21 +46,43 @@ public class Login extends Activity implements View.OnClickListener {
     }
 
     public void onClick(View v) {
-        String url = Dashboard.BACKEND_URL + "/user";
-        // String user = "{user: '"+login.getText()+"' , password: '"+password.getText()+"'}";
-        JSONObject user = new JSONObject();
-        try {
-            user.put("email", login.getText());
-            user.put("password", password.getText());
-            RestResponse response = Rest.POST(url, user);
+        new LoginCall().execute(login.getText().toString(),password.getText().toString());
+    }
 
-            SharedPreferences settings = getSharedPreferences(Dashboard.PREFS_NAME, 0);
-            SharedPreferences.Editor editor = settings.edit();
-            editor.putString(Dashboard.APP_KEY, response.getResponseBody());
-            editor.commit();
 
-        } catch (Exception e) {
-            Log.d(DEBUG_TAG, "The response is: " + e.getMessage());
+    private class LoginCall extends AsyncTask<String,String,RestResponse> {
+
+        @Override
+        protected RestResponse doInBackground(String... params){
+            try {
+                String url = Dashboard.BACKEND_URL + "/user";
+                JSONObject user = new JSONObject();
+                user.put("email", params[0]);
+                user.put("password", params[1]);
+                return Rest.POST(url, user);
+
+            } catch (Exception e ) {
+
+                Log.d(DEBUG_TAG, "Exception " + e.getMessage());
+
+                return new RestResponse(0,null);
+
+            }
+        }
+
+        protected void onPostExecute(RestResponse restResponse){
+            if(restResponse.getCode() == 200) {
+                try {
+                    SharedPreferences settings = getSharedPreferences(Dashboard.PREFS_NAME, 0);
+                    SharedPreferences.Editor editor = settings.edit();
+                    editor.putString(Dashboard.APP_KEY, restResponse.getResponseBody().getString("id"));
+                    editor.commit();
+                    finish();
+                } catch(JSONException je) {
+                    Log.d(DEBUG_TAG,je.getMessage());
+                }
+            }
         }
     }
+
 }

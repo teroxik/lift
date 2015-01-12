@@ -1,20 +1,22 @@
 package com.mj.lift.rest;
 
+import org.json.JSONObject;
+
 public class RestResponse {
 
     private Integer code;
-    private String responseBody;
+    private JSONObject responseBody;
 
-    public RestResponse(Integer code, String responseBody) {
+    public RestResponse(Integer code, JSONObject responseBody) {
         this.code = code;
         this.responseBody = responseBody;
     }
 
-    public String getResponseBody() {
+    public JSONObject getResponseBody() {
         return responseBody;
     }
 
-    public void setResponseBody(String responseBody) {
+    public void setResponseBody(JSONObject responseBody) {
         this.setResponseBody(responseBody);
     }
 

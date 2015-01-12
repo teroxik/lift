@@ -19,7 +19,8 @@ public class Dashboard extends Activity implements SensorEventListener {
 
     public static final String PREFS_NAME = "LiftPrefs";
     public static final String APP_KEY = "APP_KEY";
-    public static final String BACKEND_URL = "";
+    public static final String BACKEND_URL = "http://192.168.0.7:12552";
+    private static String DEBUG_TAG = "Dashboard";
 
     //user put - login
     //user post - creation
@@ -69,7 +70,7 @@ public class Dashboard extends Activity implements SensorEventListener {
         if(uuid == null) {
             doLogin();
         } else {
-            new CheckCall().execute("BACKEND_URL" + "/user/" + uuid + "/check");
+            new CheckCall().execute(BACKEND_URL + "/user/" + uuid + "/check");
         }
     }
 
@@ -111,9 +112,8 @@ public class Dashboard extends Activity implements SensorEventListener {
 
             } catch (Exception e ) {
 
-                System.out.println(e.getMessage());
-
-                return new RestResponse(0,"");
+                Log.d(DEBUG_TAG,e.getMessage());
+                return new RestResponse(0,null);
 
             }
         }
