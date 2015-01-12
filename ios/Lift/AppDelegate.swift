@@ -6,6 +6,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var deviceToken: NSData?
     var window: UIWindow?
     var alertView: UIAlertView? = nil
+    
+    class func becomeCurrentRemoteNotificationDelegate(delegate: RemoteNotificationDelegate) {
+        (UIApplication.sharedApplication().delegate! as AppDelegate).currentRemoteNotificationDelegate = delegate
+    }
+    
+    class func unbecomeCurrentRemoteNotificationDelegate() {
+        (UIApplication.sharedApplication().delegate! as AppDelegate).currentRemoteNotificationDelegate = nil
+    }
+    
+    weak var currentRemoteNotificationDelegate: RemoteNotificationDelegate?
 
     func application(application: UIApplication, didFinishLaunchingWithOptions launchOptions: [NSObject: AnyObject]?) -> Bool {
         // notifications et al
@@ -17,9 +27,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // main initialization
         // Prepare the cache
         LiftServerCache.sharedInstance.build { _ in
-            if let x = CurrentLiftUser.userId {
+            if let userId = CurrentLiftUser.userId {
                 // We have previously-known user id. But is the account still there?
-                LiftServer.sharedInstance.userCheckAccount(CurrentLiftUser.userId!) { r in
+                LiftServer.sharedInstance.userCheckAccount(userId) { r in
+                    if let x = self.deviceToken {
+                        LiftServer.sharedInstance.userRegisterDeviceToken(userId, deviceToken: x)
+                    }
+
                     self.startWithStoryboardId(storyboard, id: r.cata({ err in if err.code == 404 { return "login" } else { return "offline" } }, { x in return "main" }))
                 }
             } else {
@@ -81,7 +95,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
     
     func application(application: UIApplication, didReceiveRemoteNotification userInfo: [NSObject : AnyObject]) {
-        if self.alertView == nil {
+        if let x = currentRemoteNotificationDelegate {
+            x.remoteNotificationReceivedAlert("foo")
+        } else if self.alertView == nil {
             let aps = userInfo["aps"] as [NSObject : AnyObject]
             let alert = aps["alert"] as String
             

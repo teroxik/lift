@@ -94,6 +94,9 @@ class UserProfile extends PersistentActor with ActorLogging with AutoPassivation
       log.debug("SnapshotOffer: not registered -> registered.")
       profile = offeredSnapshot
       context.become(registered)
+    case acc: Account ⇒ profile = Profile(acc, Devices.empty, None, None)
+    case pp: PublicProfile ⇒ profile = profile.withPublicProfile(pp)
+    case pi: Array[Byte] ⇒ profile = profile.withProfileImage(pi)
   }
 
   override def receiveCommand: Receive = notRegistered

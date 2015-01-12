@@ -4,9 +4,10 @@ import java.util.{Date, UUID}
 
 import akka.actor.ActorRef
 import com.eigengo.lift.exercise.ExerciseClassifiers.{GetMuscleGroups, MuscleGroup}
-import com.eigengo.lift.exercise.UserExercises.{UserExerciseDataProcessSinglePacket, UserExerciseSessionEnd, UserExerciseSessionStart}
+import com.eigengo.lift.exercise.UserExercises._
 import com.eigengo.lift.exercise.UserExercisesView._
 import scodec.bits.BitVector
+import spray.http.HttpEntity
 import spray.routing.Directives
 
 import scala.concurrent.ExecutionContext
@@ -24,11 +25,6 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
       }
     } ~
     path("exercise" / UserIdValue) { userId ⇒
-      post {
-        handleWith { sessionProps: SessionProps ⇒
-          (userExercises ? UserExerciseSessionStart(userId, sessionProps)).mapRight[UUID]
-        }
-      } ~
       get {
         parameters('startDate.as[Date], 'endDate.as[Date]) { (startDate, endDate) ⇒
           complete {
@@ -42,6 +38,20 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
         } ~
         complete {
           (userExercisesView ? UserGetExerciseSessionsDates(userId)).mapTo[List[SessionDate]]
+        }
+      }
+    } ~
+    path("exercise" / UserIdValue / "start") { userId ⇒
+      post {
+        handleWith { sessionProps: SessionProps ⇒
+          (userExercises ? UserExerciseSessionStart(userId, sessionProps)).mapRight[UUID]
+        }
+      }
+    } ~
+    path("exercise" / UserIdValue / SessionIdValue / "end") { (userId, sessionId) ⇒
+      post {
+        complete {
+          (userExercises ? UserExerciseSessionEnd(userId, sessionId)).mapRight[Unit]
         }
       }
     } ~
@@ -59,9 +69,21 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
       } ~
       delete {
         complete {
-          (userExercises ? UserExerciseSessionEnd(userId, sessionId)).mapRight[Unit]
+          (userExercises ? UserExerciseSessionDelete(userId, sessionId)).mapRight[Unit]
+        }
+      }
+    } ~
+    path("exercise" / UserIdValue / SessionIdValue / "classification") { (userId, sessionId) ⇒
+      post {
+        handleWith { exercise: Exercise ⇒
+          (userExercises ? UserExerciseExplicitClassificationStart(userId, sessionId, exercise)).mapRight[Unit]
+        }
+      } ~
+      delete {
+        complete {
+          userExercises ! UserExerciseExplicitClassificationEnd(userId, sessionId)
+          ""
         }
       }
     }
-
 }
