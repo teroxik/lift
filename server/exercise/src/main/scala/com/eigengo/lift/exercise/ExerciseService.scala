@@ -3,11 +3,9 @@ package com.eigengo.lift.exercise
 import java.util.{Date, UUID}
 
 import akka.actor.ActorRef
-import com.eigengo.lift.exercise.ExerciseClassifiers.{GetMuscleGroups, MuscleGroup}
-import com.eigengo.lift.exercise.UserExercises._
-import com.eigengo.lift.exercise.UserExercisesView._
+import com.eigengo.lift.exercise.UserExercisesProcessor._
+import com.eigengo.lift.exercise.UserExercisesSessions._
 import scodec.bits.BitVector
-import spray.http.HttpEntity
 import spray.routing.Directives
 
 import scala.concurrent.ExecutionContext
@@ -16,11 +14,11 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
   import akka.pattern.ask
   import com.eigengo.lift.common.Timeouts.defaults._
 
-  def exerciseRoute(userExercises: ActorRef, userExercisesView: ActorRef, exerciseClassifiers: ActorRef)(implicit ec: ExecutionContext) =
+  def exerciseRoute(userExercises: ActorRef, userExercisesView: ActorRef)(implicit ec: ExecutionContext) =
     path("exercise" / "musclegroups") {
       get {
         complete {
-          (exerciseClassifiers ? GetMuscleGroups).mapTo[List[MuscleGroup]]
+          UserExercisesClassifier.supportedMuscleGroups
         }
       }
     } ~
@@ -62,9 +60,8 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
         }
       } ~
       put {
-        // TODO: content type negotiation
-        handleWith { bits: BitVector ⇒
-          (userExercises ? UserExerciseDataProcessSinglePacket(userId, sessionId, bits)).mapRight[Unit]
+        handleWith { mp: MultiPacket ⇒
+          (userExercises ? UserExerciseDataProcessMultiPacket(userId, sessionId, mp)).mapRight[Unit]
         }
       } ~
       delete {
@@ -73,10 +70,24 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
         }
       }
     } ~
+    path("exercise" / UserIdValue / SessionIdValue / "metric") { (userId, sessionId) ⇒
+      post {
+        handleWith { metric: Metric ⇒
+          userExercises ! UserExerciseSetExerciseMetric(userId, sessionId, metric)
+          ""
+        }
+      }
+    } ~
     path("exercise" / UserIdValue / SessionIdValue / "classification") { (userId, sessionId) ⇒
+      get {
+        complete {
+          (userExercises ? UserExerciseExplicitClassificationExamples(userId, sessionId)).mapTo[List[Exercise]]
+        }
+      } ~
       post {
         handleWith { exercise: Exercise ⇒
-          (userExercises ? UserExerciseExplicitClassificationStart(userId, sessionId, exercise)).mapRight[Unit]
+          userExercises ! UserExerciseExplicitClassificationStart(userId, sessionId, exercise)
+          ""
         }
       } ~
       delete {

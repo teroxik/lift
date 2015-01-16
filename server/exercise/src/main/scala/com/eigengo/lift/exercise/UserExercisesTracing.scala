@@ -2,12 +2,10 @@ package com.eigengo.lift.exercise
 
 import java.io.FileOutputStream
 
-import akka.actor.{Actor, Props}
-import akka.persistence.PersistentActor
-import com.eigengo.lift.exercise.ExerciseClassifier._
-import com.eigengo.lift.exercise.UserExercisesView._
-import com.eigengo.lift.exercise.packet.MultiPacket
-import scodec.bits.BitVector
+import akka.actor.Props
+import akka.persistence.PersistentView
+import com.eigengo.lift.common.UserId
+import com.eigengo.lift.exercise.UserExercisesClassifier._
 
 import scala.util.Try
 
@@ -15,10 +13,7 @@ import scala.util.Try
  * The protocol & companion
  */
 object UserExercisesTracing {
-  val props: Props = Props[UserExercisesTracing]
-
-  case class DecodingSucceeded(sensorData: List[SensorDataWithLocation]) extends AnyVal
-  case class DecodingFailed(error: String) extends AnyVal
+  def props(userId: UserId): Props = Props(classOf[UserExercisesTracing], userId.toString)
 
   private case class Tag(tapped: Boolean, userExercise: Option[Exercise], systemExercise: Option[Exercise]) {
     def withUserExercise(ue: Option[Exercise]): Tag = copy(userExercise = ue)
@@ -49,14 +44,10 @@ object UserExercisesTracing {
     sdwls.foreach(save(id, tag))
   }
 
-  def saveBits(counter: Int, id: SessionId, bits: BitVector): Int = {
-    Try { val fos = new FileOutputStream(s"/tmp/lift-$id.dat", true); fos.write(bits.toByteArray); fos.close() }
-    counter + 1
-  }
-
   def saveMultiPacket(counter: Int, id: SessionId, packet: MultiPacket): Int = {
-    // TODO: complete me
-    ???
+    packet.packets.foreach { pwl ⇒
+      Try { val fos = new FileOutputStream(s"/tmp/lift-$id-${pwl.sourceLocation}-$counter.dat", true); fos.write(pwl.payload.toByteArray); fos.close() }
+    }
     counter + 1
   }
 
@@ -65,36 +56,35 @@ object UserExercisesTracing {
 /**
  * Tracing actor that collects data about a running session
  */
-class UserExercisesTracing extends PersistentActor {
+class UserExercisesTracing(userId: String) extends PersistentView {
+  import com.eigengo.lift.exercise.UserExercises._
   import com.eigengo.lift.exercise.UserExercisesTracing._
+
   private var counter: Int = 0
   private var tag: Tag = Tag.empty
 
-  override def receiveRecover: Receive = Actor.emptyBehavior
-
   private def inASession(id: SessionId): Receive = {
-    case SessionEndedEvt(`id`)         ⇒ context.become(notExercising)
-    case SessionStartedEvt(newId, _)   ⇒ context.become(inASession(newId))
+    case SessionEndedEvt(`id`)       ⇒ context.become(notExercising)
+    case SessionStartedEvt(newId, _) ⇒ context.become(inASession(newId))
 
-    case packet: BitVector             ⇒ counter = saveBits(counter, id, packet)
-    case packet: MultiPacket           ⇒ counter = saveMultiPacket(counter, id, packet)
-    case DecodingFailed(error)         ⇒
-    case DecodingSucceeded(sensorData) ⇒ appendSensorData(id, tag, sensorData)
+    case MultiPacketDecodingFailedEvt(_, _, packet)  ⇒ counter = saveMultiPacket(counter, id, packet)
+
+    case ClassifyExerciseEvt(_, sdwl)                ⇒ appendSensorData(id, tag, sdwl)
 
     case ExerciseEvt(`id`, ModelMetadata.user, exercise) ⇒ tag = tag.withUserExercise(Some(exercise))
-    case ExerciseEvt(`id`, metadata, exercise) ⇒ tag = tag.withSystemExercise(Some(exercise))
-    case ExerciseSetExplicitMarkEvt(`id`) ⇒ tag = tag.withToggledTap()
-    case NoExercise(ModelMetadata.user) ⇒ tag = tag.withUserExercise(None)
-    case NoExercise(metadata) ⇒ tag = tag.withSystemExercise(None)
-
-    case TooMuchRestEvt(`id`) ⇒
+    case ExerciseEvt(`id`, metadata, exercise)           ⇒ tag = tag.withSystemExercise(Some(exercise))
+    case ExerciseSetExplicitMarkEvt(`id`)                ⇒ tag = tag.withToggledTap()
+    case NoExercise(ModelMetadata.user)                  ⇒ tag = tag.withUserExercise(None)
+    case NoExercise(metadata)                            ⇒ tag = tag.withSystemExercise(None)
   }
 
   private def notExercising: Receive = {
     case SessionStartedEvt(id, _) ⇒ tag = Tag.empty; context.become(inASession(id))
   }
 
-  override def receiveCommand: Receive = notExercising
+  override def receive: Receive = notExercising
 
-  override val persistenceId: String = s"user-exercises-tracing-${self.path.name}"
+  override val persistenceId: String = s"user-exercises-${userId.toString}"
+
+  override val viewId: String = s"user-exercises-tracing-${userId.toString}"
 }
