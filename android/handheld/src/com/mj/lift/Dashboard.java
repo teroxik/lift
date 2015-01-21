@@ -3,6 +3,7 @@ package com.mj.lift;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -46,9 +47,29 @@ public class Dashboard extends Activity implements SensorEventListener {
         mSensorManager.registerListener(this, mAccelerometer , SensorManager.SENSOR_DELAY_NORMAL);
     }
 
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+
+        if (requestCode == 1) {
+            if(resultCode == RESULT_OK){
+                String result=data.getStringExtra("result");
+                Log.d(DEBUG_TAG,result);
+                SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+                SharedPreferences.Editor editor = settings.edit();
+                editor.putString(APP_KEY, result);
+                editor.commit();
+            }
+            if (resultCode == RESULT_CANCELED) {
+                //Write your code if there's no result
+            }
+        }
+    }//onActivityResult
+
+
     public void doLogin() {
-        Intent intent = new Intent(this, Login.class);
-        startActivity(intent);
+        Intent i = new Intent(this, Login.class);
+        startActivityForResult(i, 1);
     }
 
 

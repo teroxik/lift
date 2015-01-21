@@ -1,6 +1,7 @@
 package com.mj.lift;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -73,10 +74,9 @@ public class Login extends Activity implements View.OnClickListener {
         protected void onPostExecute(RestResponse restResponse){
             if(restResponse.getCode() == 200) {
                 try {
-                    SharedPreferences settings = getSharedPreferences(Dashboard.PREFS_NAME, 0);
-                    SharedPreferences.Editor editor = settings.edit();
-                    editor.putString(Dashboard.APP_KEY, restResponse.getResponseBody().getString("id"));
-                    editor.commit();
+                    Intent i = new Intent();
+                    i.putExtra("id",restResponse.getResponseBody().getString("id"));
+                    setResult(RESULT_OK,i);
                     finish();
                 } catch(JSONException je) {
                     Log.d(DEBUG_TAG,je.getMessage());
