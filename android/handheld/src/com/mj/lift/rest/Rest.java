@@ -52,7 +52,41 @@ public class Rest {
             con.setRequestProperty("Content-Type", "application/json; charset=utf8");
             os = con.getOutputStream();
             os.flush();
-            writePayload(payload.toString().getBytes("UTF-8"),os);
+            if(payload != null) {
+                writePayload(payload.toString().getBytes("UTF-8"), os);
+            }
+            is = con.getInputStream();
+            return new RestResponse(con.getResponseCode(),  readResponse(is));
+        } finally {
+            if (is != null) {
+                is.close();
+            }
+            if (os != null) {
+                os.close();
+            }
+            if(con != null) {
+                con.disconnect();
+            }
+        }
+    }
+
+
+    public static RestResponse PUT(String urlString, byte[] payload) throws IOException,JSONException {
+        InputStream is = null;
+        OutputStream os = null;
+        HttpURLConnection con = null;
+        try {
+            URL url = new URL(urlString);
+            con = (HttpURLConnection) url.openConnection();
+            con.setReadTimeout(10000 /* milliseconds */);
+            con.setConnectTimeout(15000 /* milliseconds */);
+            con.setDoOutput(true);
+            con.setRequestMethod("PUT");
+            os = con.getOutputStream();
+            os.flush();
+            if(payload != null) {
+                writePayload(payload, os);
+            }
             is = con.getInputStream();
             return new RestResponse(con.getResponseCode(),  readResponse(is));
         } finally {

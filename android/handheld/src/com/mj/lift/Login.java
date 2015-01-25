@@ -56,11 +56,45 @@ public class Login extends Activity implements View.OnClickListener {
         @Override
         protected RestResponse doInBackground(String... params){
             try {
+
+                Log.i(DEBUG_TAG,"Log in call");
                 String url = Dashboard.BACKEND_URL + "/user";
                 JSONObject user = new JSONObject();
                 user.put("email", params[0]);
                 user.put("password", params[1]);
                 return Rest.POST(url, user);
+
+            } catch (Exception e ) {
+
+                Log.d(DEBUG_TAG, "Exception " + e.getMessage());
+
+                return new RestResponse(0,null);
+
+            }
+        }
+
+        protected void onPostExecute(RestResponse restResponse){
+            if(restResponse.getCode() == 200) {
+                try {
+                    Intent i = new Intent();
+                    String id = restResponse.getResponseBody().getString("id");
+                    i.putExtra("id",id);
+                    setResult(RESULT_OK,i);
+                    new RegisterDeviceCall().execute(id);
+                    finish();
+                } catch(JSONException je) {
+                    Log.d(DEBUG_TAG,je.getMessage());
+                }
+            }
+        }
+    }
+
+    private class RegisterDeviceCall extends AsyncTask<String,String,RestResponse> {
+        @Override
+        protected RestResponse doInBackground(String... params){
+            try {
+                String url = Dashboard.BACKEND_URL + "/user" +params[0]+ "/device/android";
+                return Rest.POST(url, null);
 
             } catch (Exception e ) {
 
@@ -84,5 +118,6 @@ public class Login extends Activity implements View.OnClickListener {
             }
         }
     }
+
 
 }

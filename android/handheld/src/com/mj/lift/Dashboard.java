@@ -23,9 +23,6 @@ public class Dashboard extends Activity implements SensorEventListener {
     public static final String BACKEND_URL = "http://192.168.0.7:12552";
     private static String DEBUG_TAG = "Dashboard";
 
-    //user put - login
-    //user post - creation
-    //user/userId/check
 
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
@@ -86,11 +83,15 @@ public class Dashboard extends Activity implements SensorEventListener {
     }
 
     private void checkUserExists() {
+        Log.i(DEBUG_TAG,"Check user exists.");
+
         String uuid = getSharedPreferences(PREFS_NAME,0).getString(APP_KEY,null);
 
         if(uuid == null) {
+            Log.i(DEBUG_TAG,"Uuid = null -> login");
             doLogin();
         } else {
+            Log.i(DEBUG_TAG,"Check if uuid is o?");
             new CheckCall().execute(BACKEND_URL + "/user/" + uuid + "/check");
         }
     }
@@ -128,7 +129,7 @@ public class Dashboard extends Activity implements SensorEventListener {
         @Override
         protected RestResponse doInBackground(String... params){
             try {
-
+                Log.i(DEBUG_TAG,"Check called");
                 return Rest.GET(params[0]);
 
             } catch (Exception e ) {
@@ -141,6 +142,7 @@ public class Dashboard extends Activity implements SensorEventListener {
 
         protected void onPostExecute(RestResponse restResponse){
            if(200 != restResponse.getCode()) {
+               Log.i(DEBUG_TAG,"User id doesn't exist do the login.");
                doLogin();
            }
         }
