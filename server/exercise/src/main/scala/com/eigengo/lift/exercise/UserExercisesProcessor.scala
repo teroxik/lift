@@ -1,5 +1,8 @@
 package com.eigengo.lift.exercise
 
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+
 import akka.actor._
 import akka.contrib.pattern.ShardRegion
 import akka.persistence.{PersistentActor, SnapshotOffer}
@@ -16,7 +19,7 @@ object UserExercisesProcessor {
   /** The shard name */
   val shardName = "user-exercises"
   /** The sessionProps to create the actor on a node */
-  def props(notification: ActorRef, userProfile: ActorRef) = Props(classOf[UserExercisesProcessor], notification, userProfile)
+  def props(kafka: ActorRef, notification: ActorRef, userProfile: ActorRef) = Props(classOf[UserExercisesProcessor], kafka, notification, userProfile)
 
   /**
    * Remove a session identified by ``sessionId`` for user identified by ``userId``
@@ -24,6 +27,22 @@ object UserExercisesProcessor {
    * @param sessionId the session identity
    */
   case class UserExerciseSessionDelete(userId: UserId, sessionId: SessionId)
+
+  /**
+   * Replay all data received for a possibly existing ``sessionId`` for the given ``userId``
+   * @param userId the user identity
+   * @param sessionId the session identity
+   * @param data all session data
+   */
+  case class UserExerciseSessionReplayProcessData(userId: UserId, sessionId: SessionId, data: Array[Byte])
+
+  /**
+   * Starts the replay all data received for a possibly existing ``sessionId`` for the given ``userId``
+   * @param userId the user identity
+   * @param sessionId the session identity
+   * @param sessionProps the session props
+   */
+  case class UserExerciseSessionReplayStart(userId: UserId, sessionId: SessionId, sessionProps: SessionProps)
 
   /**
    * User classified exercise start.
@@ -111,6 +130,20 @@ object UserExercisesProcessor {
   private case class ExerciseExplicitClassificationExamples(sessionId: SessionId)
 
   /**
+   * Replay the ``sessionId`` by re-processing all data in ``data``
+   * @param sessionId the session identity
+   * @param data all session data
+   */
+  private case class ExerciseSessionReplayProcessData(sessionId: SessionId, data: Array[Byte])
+
+  /**
+   * Starts the replay the ``sessionId`` by re-processing all data in ``data``
+   * @param sessionId the session identity
+   * @param sessionProps the session props
+   */
+  private case class ExerciseSessionReplayStart(sessionId: SessionId, sessionProps: SessionProps)
+
+  /**
    * Sets the metric for the unmarked exercises in the currently open set
    * @param sessionId the session identity
    * @param metric the metric
@@ -171,6 +204,8 @@ object UserExercisesProcessor {
     case UserExerciseSessionEnd(userId, sessionId)                            ⇒ (userId.toString, ExerciseSessionEnd(sessionId))
     case UserExerciseDataProcessMultiPacket(userId, sessionId, packets)       ⇒ (userId.toString, ExerciseDataProcessMultiPacket(sessionId, packets))
     case UserExerciseSessionDelete(userId, sessionId)                         ⇒ (userId.toString, ExerciseSessionDelete(sessionId))
+    case UserExerciseSessionReplayProcessData(userId, sessionId, data)        ⇒ (userId.toString, ExerciseSessionReplayProcessData(sessionId, data))
+    case UserExerciseSessionReplayStart(userId, sessionId, props)             ⇒ (userId.toString, ExerciseSessionReplayStart(sessionId, props))
     case UserExerciseExplicitClassificationStart(userId, sessionId, exercise) ⇒ (userId.toString, ExerciseExplicitClassificationStart(sessionId, exercise))
     case UserExerciseExplicitClassificationEnd(userId, sessionId)             ⇒ (userId.toString, ExerciseExplicitClassificationEnd(sessionId))
     case UserExerciseExplicitClassificationExamples(userId, sessionId)        ⇒ (userId.toString, ExerciseExplicitClassificationExamples(sessionId))
@@ -189,16 +224,20 @@ object UserExercisesProcessor {
     case UserExerciseExplicitClassificationStart(userId, _, _) ⇒ s"${userId.hashCode() % 10}"
     case UserExerciseExplicitClassificationEnd(userId, _)      ⇒ s"${userId.hashCode() % 10}"
     case UserExerciseExplicitClassificationExamples(userId, _) ⇒ s"${userId.hashCode() % 10}"
+    case UserExerciseSessionReplayProcessData(userId, _, _)    ⇒ s"${userId.hashCode() % 10}"
+    case UserExerciseSessionReplayStart(userId, _, _)          ⇒ s"${userId.hashCode() % 10}"
   }
-
 }
 
 /**
  * Models each user's exercises as its state, which is updated upon receiving and classifying the
  * ``AccelerometerData``. It also provides the query for the current state.
  */
-class UserExercisesProcessor(notification: ActorRef, userProfile: ActorRef)
-  extends PersistentActor with ActorLogging with AutoPassivation {
+class UserExercisesProcessor(override val kafka: ActorRef, notification: ActorRef, userProfile: ActorRef)
+  extends KafkaProducerPersistentActor
+  with ActorLogging
+  with AutoPassivation {
+
   import com.eigengo.lift.exercise.UserExercisesClassifier._
   import com.eigengo.lift.exercise.UserExercisesProcessor._
   import scala.concurrent.duration._
@@ -223,6 +262,19 @@ class UserExercisesProcessor(notification: ActorRef, userProfile: ActorRef)
   override def receiveRecover: Receive = {
     case SnapshotOffer(_, SessionStartedEvt(sessionId, sessionProps)) ⇒
       context.become(exercising(sessionId, sessionProps))
+  }
+
+  private def replaying(id: SessionId, sessionProps: SessionProps): Receive = withPassivation {
+    case ExerciseSessionReplayProcessData(`id`, data) ⇒
+      log.warning("Not yet handling processing of the data")
+
+      // TODO: fixme
+      val fos = new FileOutputStream(s"/Users/janmachacek/$id.mp")
+      fos.write(data)
+      fos.close()
+
+      sender() ! \/.right(())
+      context.become(notExercising)
   }
 
   private def exercising(id: SessionId, sessionProps: SessionProps): Receive = withPassivation {
@@ -260,7 +312,7 @@ class UserExercisesProcessor(notification: ActorRef, userProfile: ActorRef)
 
     // explicit classification
     case ExerciseExplicitClassificationStart(`id`, exercise) =>
-      persist(ExerciseEvt(id, ModelMetadata.user, exercise)) { evt ⇒ }
+      persistAndProduceToKafka(ExerciseEvt(id, ModelMetadata.user, exercise)) { evt ⇒ }
 
     case ExerciseExplicitClassificationEnd(`id`) ⇒
       self ! NoExercise(ModelMetadata.user)
@@ -284,7 +336,6 @@ class UserExercisesProcessor(notification: ActorRef, userProfile: ActorRef)
 
     case NoExercise(metadata) ⇒
       persist(NoExerciseEvt(id, metadata)) { evt ⇒ }
-
   }
 
   private def notExercising: Receive = withPassivation {
@@ -294,15 +345,24 @@ class UserExercisesProcessor(notification: ActorRef, userProfile: ActorRef)
         sender() ! \/.right(evt.sessionId)
         context.become(exercising(evt.sessionId, sessionProps))
       }
+
+    case ExerciseSessionReplayStart(oldSessionId, sessionProps) ⇒
+      val id = SessionId.randomId()
+      persist(Seq(SessionAbandonedEvt(oldSessionId), SessionStartedEvt(id, sessionProps))) { case _ :: started :: Nil ⇒
+        saveSnapshot(started)
+        sender() ! \/.right(id)
+        println("Sending " + id)
+        context.become(replaying(id, sessionProps))
+      }
+
     case ExerciseSessionEnd(_) ⇒
       sender() ! \/.left("Not in session")
 
     case ExerciseSessionDelete(sessionId) ⇒
-      persist(SessionDeletedEvt(sessionId)) { evt ⇒
+      persistAndProduceToKafka(SessionDeletedEvt(sessionId)) { evt ⇒
         sender() ! \/.right(())
       }
   }
 
   override def receiveCommand: Receive = notExercising
-
 }

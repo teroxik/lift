@@ -5,7 +5,6 @@ import java.util.{Date, UUID}
 import akka.actor.ActorRef
 import com.eigengo.lift.exercise.UserExercisesProcessor._
 import com.eigengo.lift.exercise.UserExercisesSessions._
-import scodec.bits.BitVector
 import spray.routing.Directives
 
 import scala.concurrent.ExecutionContext
@@ -14,7 +13,7 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
   import akka.pattern.ask
   import com.eigengo.lift.common.Timeouts.defaults._
 
-  def exerciseRoute(userExercises: ActorRef, userExercisesView: ActorRef)(implicit ec: ExecutionContext) =
+  def exerciseRoute(kafkaProducer: ActorRef, userExercises: ActorRef, userExercisesView: ActorRef)(implicit ec: ExecutionContext) =
     path("exercise" / "musclegroups") {
       get {
         complete {
@@ -75,6 +74,18 @@ trait ExerciseService extends Directives with ExerciseMarshallers {
         handleWith { metric: Metric ⇒
           userExercises ! UserExerciseSetExerciseMetric(userId, sessionId, metric)
           ()
+        }
+      }
+    } ~
+    path("exercise" / UserIdValue / SessionIdValue / "replay") { (userId, sessionId) ⇒
+      post {
+        handleWith { sessionProps: SessionProps ⇒
+          (userExercises ? UserExerciseSessionReplayStart(userId, sessionId, sessionProps)).mapRight[UUID]
+        }
+      } ~
+      put {
+        ctx ⇒ ctx.complete {
+          (userExercises ? UserExerciseSessionReplayProcessData(userId, sessionId, ctx.request.entity.data.toByteArray)).mapRight[Unit]
         }
       }
     } ~
