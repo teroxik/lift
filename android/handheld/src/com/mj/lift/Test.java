@@ -8,8 +8,8 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
-import com.mj.lift.rest.Rest;
-import com.mj.lift.rest.RestResponse;
+import com.mj.lift.server.Rest;
+import com.mj.lift.server.RestResponse;
 import org.json.JSONException;
 
 public class Test extends Activity implements View.OnClickListener {

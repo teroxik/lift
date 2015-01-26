@@ -1,4 +1,4 @@
-package com.mj.lift.rest;
+package com.mj.lift.server;
 
 import org.json.JSONObject;
 

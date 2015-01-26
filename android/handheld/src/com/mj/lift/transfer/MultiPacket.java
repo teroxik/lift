@@ -1,11 +1,7 @@
-package com.mj.lift.transfer
+package com.mj.lift.transfer;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -14,7 +10,7 @@ import java.util.Map;
  * ``append`` as many times as you need, following by ``build()`` to get the
  * ``NSData`` that can be sent & decoded on the server.
  */
-class MutableMultiPacket {
+class MultiPacket {
 
     private static final Integer BUFFER_SIZE = 1000;
 

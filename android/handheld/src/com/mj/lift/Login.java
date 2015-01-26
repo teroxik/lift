@@ -2,7 +2,6 @@ package com.mj.lift;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
 
@@ -10,8 +9,10 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import com.mj.lift.rest.Rest;
-import com.mj.lift.rest.RestResponse;
+import android.widget.Toast;
+import com.mj.lift.server.LiftServer;
+import com.mj.lift.server.Rest;
+import com.mj.lift.server.RestResponse;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -62,11 +63,20 @@ public class Login extends Activity implements View.OnClickListener {
                 JSONObject user = new JSONObject();
                 user.put("email", params[0]);
                 user.put("password", params[1]);
-                return Rest.POST(url, user);
+                String uuid = getSharedPreferences(Dashboard.PREFS_NAME,0).getString(Dashboard.APP_KEY,null);
+                //To be replaced by some clever way
+                LiftServer server = new LiftServer();
+                LiftServer.LiftRequest req = null;
+                if(uuid == null)
+                    req = server.createRequest(LiftServer.Api.USER_REGISTER);
+                else
+                    req = server.createRequest(LiftServer.Api.USER_LOGIN);
+                req.setJsonPayload(user);
+                return Rest.executeRequest(req);
 
             } catch (Exception e ) {
 
-                Log.d(DEBUG_TAG, "Exception " + e.getMessage());
+                Log.d(DEBUG_TAG, "Exception "+ e.getMessage(),e);
 
                 return new RestResponse(0,null);
 
@@ -79,12 +89,15 @@ public class Login extends Activity implements View.OnClickListener {
                     Intent i = new Intent();
                     String id = restResponse.getResponseBody().getString("id");
                     i.putExtra("id",id);
-                    setResult(RESULT_OK,i);
+                    Log.d(DEBUG_TAG,"Id je: "+id);
+                    setResult(RESULT_OK, i);
                     new RegisterDeviceCall().execute(id);
                     finish();
                 } catch(JSONException je) {
                     Log.d(DEBUG_TAG,je.getMessage());
                 }
+            } else {
+                Toast.makeText(this.getApplication,"Returned code: "+restResponse.getCode(),Toast.LENGTH_SHORT);
             }
         }
     }
@@ -93,8 +106,10 @@ public class Login extends Activity implements View.OnClickListener {
         @Override
         protected RestResponse doInBackground(String... params){
             try {
-                String url = Dashboard.BACKEND_URL + "/user" +params[0]+ "/device/android";
-                return Rest.POST(url, null);
+                //To be replace by some service
+                LiftServer server = new LiftServer(params[0]);
+                LiftServer.LiftRequest req = server.createRequest(LiftServer.Api.USER_REGISTER_DEVICE);
+                return Rest.executeRequest(req);
 
             } catch (Exception e ) {
 

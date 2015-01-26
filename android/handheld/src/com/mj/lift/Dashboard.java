@@ -12,8 +12,8 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.TextView;
-import com.mj.lift.rest.Rest;
-import com.mj.lift.rest.RestResponse;
+import com.mj.lift.server.Rest;
+import com.mj.lift.server.RestResponse;
 
 
 public class Dashboard extends Activity implements SensorEventListener {
@@ -51,7 +51,7 @@ public class Dashboard extends Activity implements SensorEventListener {
         if (requestCode == 1) {
             if(resultCode == RESULT_OK){
                 String result=data.getStringExtra("result");
-                Log.d(DEBUG_TAG,result);
+                Log.d(DEBUG_TAG,"Resulte received");
                 SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
                 SharedPreferences.Editor editor = settings.edit();
                 editor.putString(APP_KEY, result);
@@ -78,7 +78,6 @@ public class Dashboard extends Activity implements SensorEventListener {
 
     protected void onResume() {
         super.onResume();
-        checkUserExists();
         mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
     }
 

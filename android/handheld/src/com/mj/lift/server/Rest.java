@@ -1,4 +1,4 @@
-package com.mj.lift.rest;
+package com.mj.lift.server;
 
 import android.util.Log;
 import org.json.JSONException;
@@ -11,12 +11,34 @@ import java.net.URL;
 public class Rest {
    private static String DEBUG_TAG = "REST";
 
-   public static RestResponse GET(String urlString) throws IOException,JSONException {
+   public static RestResponse executeRequest(LiftServer.LiftRequest request) throws IOException,JSONException {
+
+       switch(request.getMethod()){
+           case GET: {
+               return get(request);
+           }
+           case POST: {
+               return post(request);
+           }
+           case PUT: {
+               return put(request);
+           }
+           case DELETE: {
+               return null;
+           }
+           default:{
+               return null;
+           }
+       }
+   }
+
+
+   private static RestResponse get(LiftServer.LiftRequest request) throws IOException,JSONException {
 
        InputStream is = null;
        HttpURLConnection con = null;
        try {
-           URL url = new URL(urlString);
+           URL url = new URL(request.getPath());
            con = (HttpURLConnection) url.openConnection();
            con.setReadTimeout(10000 /* milliseconds */);
            con.setConnectTimeout(15000 /* milliseconds */);
@@ -37,25 +59,30 @@ public class Rest {
        }
    }
 
-    public static RestResponse POST(String urlString, JSONObject payload) throws IOException,JSONException {
+    private static RestResponse post(LiftServer.LiftRequest request) throws IOException,JSONException {
         InputStream is = null;
         OutputStream os = null;
         HttpURLConnection con = null;
         try {
-            URL url = new URL(urlString);
+            URL url = new URL(request.getPath());
             con = (HttpURLConnection) url.openConnection();
             con.setReadTimeout(10000 /* milliseconds */);
             con.setConnectTimeout(15000 /* milliseconds */);
             con.setDoInput(true);
             con.setDoOutput(true);
             con.setChunkedStreamingMode(0);
-            con.setRequestProperty("Content-Type", "application/json; charset=utf8");
+
             os = con.getOutputStream();
             os.flush();
-            if(payload != null) {
-                writePayload(payload.toString().getBytes("UTF-8"), os);
+            if(request.getPayload() != null) {
+                writePayload(request.getPayload(), os);
+            }else if(request.getJsonPayload()!=null){
+                con.setRequestProperty("Content-Type", "application/json; charset=utf8");
+                writePayload(request.getJsonPayload().toString().getBytes("UTF-8"), os);
             }
-            is = con.getInputStream();
+            if(con.getResponseCode() == 200) {
+                is = con.getInputStream();
+            }
             return new RestResponse(con.getResponseCode(),  readResponse(is));
         } finally {
             if (is != null) {
@@ -71,12 +98,12 @@ public class Rest {
     }
 
 
-    public static RestResponse PUT(String urlString, byte[] payload) throws IOException,JSONException {
+    private static RestResponse put(LiftServer.LiftRequest request) throws IOException,JSONException {
         InputStream is = null;
         OutputStream os = null;
         HttpURLConnection con = null;
         try {
-            URL url = new URL(urlString);
+            URL url = new URL(request.getPath());
             con = (HttpURLConnection) url.openConnection();
             con.setReadTimeout(10000 /* milliseconds */);
             con.setConnectTimeout(15000 /* milliseconds */);
@@ -84,8 +111,11 @@ public class Rest {
             con.setRequestMethod("PUT");
             os = con.getOutputStream();
             os.flush();
-            if(payload != null) {
-                writePayload(payload, os);
+            if(request.getPayload() != null) {
+                writePayload(request.getPayload(), os);
+            }else if(request.getJsonPayload()!=null){
+                con.setRequestProperty("Content-Type", "application/json; charset=utf8");
+                writePayload(request.getJsonPayload().toString().getBytes("UTF-8"), os);
             }
             is = con.getInputStream();
             return new RestResponse(con.getResponseCode(),  readResponse(is));
